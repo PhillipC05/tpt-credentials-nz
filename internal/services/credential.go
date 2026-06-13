@@ -12,12 +12,12 @@ import (
 // CredentialService handles business logic for professional credentials
 // including verification against external professional body registries.
 type CredentialService struct {
-	repo     *repository.CredentialRepository
-	qrSvc    *QRService
+	repo  repository.Store
+	qrSvc *QRService
 }
 
 // NewCredentialService creates a new CredentialService.
-func NewCredentialService(repo *repository.CredentialRepository, qrSvc *QRService) *CredentialService {
+func NewCredentialService(repo repository.Store, qrSvc *QRService) *CredentialService {
 	return &CredentialService{
 		repo:  repo,
 		qrSvc: qrSvc,
@@ -47,7 +47,7 @@ func (s *CredentialService) CreateCredential(userID string, req *models.CreateCr
 
 	// Perform initial verification asynchronously
 	go func() {
-		if err := s.VerifyCredentialWithBody(cred); err != nil {
+		if _, err := s.VerifyCredentialWithBody(cred); err != nil {
 			log.Printf("initial verification failed for credential %s: %v", cred.ID, err)
 		}
 	}()
@@ -78,17 +78,17 @@ func (s *CredentialService) VerifyCredentialWithBody(cred *models.Credential) (b
 		cred.VerifiedAt = &now
 		cred.LastCheckedAt = &now
 
-		// Set a default expiry (e.g., 1 year from verification)
+		// Set a default expiry (1 year from verification)
 		expiry := now.AddDate(1, 0, 0)
 		cred.ExpiresAt = &expiry
 
-		if err := s.repo.UpdateCredentialVerification(cred.ID, status, now); err != nil {
+		if err := s.repo.UpdateCredentialVerification(cred.ID, status, now, &expiry); err != nil {
 			return false, fmt.Errorf("failed to update credential verification: %w", err)
 		}
 	} else {
 		cred.Status = models.CredentialStatusPending
 		cred.LastCheckedAt = &now
-		if err := s.repo.UpdateCredentialVerification(cred.ID, models.CredentialStatusPending, now); err != nil {
+		if err := s.repo.UpdateCredentialVerification(cred.ID, models.CredentialStatusPending, now, nil); err != nil {
 			return false, fmt.Errorf("failed to update credential status: %w", err)
 		}
 	}

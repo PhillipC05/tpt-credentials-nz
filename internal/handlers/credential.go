@@ -7,10 +7,15 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/PassThePlat/TPT-NZ-Public/packages/app-credentials/internal/models"
+	"github.com/PassThePlat/TPT-NZ-Public/packages/app-credentials/internal/services"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+	"github.com/gorilla/mux"
 	"golang.org/x/crypto/bcrypt"
 )
+
+// --- JWT Auth Handler ---
 
 type authHandler struct {
 	db        *sql.DB
@@ -201,34 +206,18 @@ func AuthMiddleware(jwtSecret string) func(http.Handler) http.Handler {
 		})
 	}
 }
-</content>
-</｜｜DSML｜｜>
 
-Now the credential handler:
-
-<write_to_file>
-<path>packages/app-credentials/internal/handlers/credential.go</path>
-<content>package handlers
-
-import (
-	"encoding/json"
-	"log"
-	"net/http"
-
-	"github.com/PassThePlat/TPT-NZ-Public/packages/app-credentials/internal/models"
-	"github.com/PassThePlat/TPT-NZ-Public/packages/app-credentials/internal/services"
-	"github.com/gorilla/mux"
-)
+// --- Credential Handler ---
 
 type credentialHandler struct {
-	svc  *services.CredentialService
+	svc   *services.CredentialService
 	qrSvc *services.QRService
 }
 
 // NewCredentialHandler creates a new credential handler for protected routes.
 func NewCredentialHandler(svc *services.CredentialService, qrSvc *services.QRService) *credentialHandler {
 	return &credentialHandler{
-		svc:  svc,
+		svc:   svc,
 		qrSvc: qrSvc,
 	}
 }
@@ -263,7 +252,7 @@ func (h *credentialHandler) CreateCredential(w http.ResponseWriter, r *http.Requ
 	cred, err := h.svc.CreateCredential(userID, &req)
 	if err != nil {
 		log.Printf("failed to create credential: %v", err)
-		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusBadRequest)
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
 
@@ -287,7 +276,6 @@ func (h *credentialHandler) ListCredentials(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Return empty array instead of null
 	if creds == nil {
 		creds = []models.Credential{}
 	}
@@ -313,7 +301,6 @@ func (h *credentialHandler) GetCredential(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Ensure the credential belongs to the requesting user
 	if cred.UserID != userID {
 		http.Error(w, `{"error":"credential not found"}`, http.StatusNotFound)
 		return
@@ -324,7 +311,6 @@ func (h *credentialHandler) GetCredential(w http.ResponseWriter, r *http.Request
 }
 
 // RefreshCredential handles POST /api/credentials/{id}/refresh.
-// It performs a live status check against the professional body's registry.
 func (h *credentialHandler) RefreshCredential(w http.ResponseWriter, r *http.Request) {
 	userID := r.Header.Get("X-User-ID")
 	if userID == "" {
@@ -390,7 +376,6 @@ func (h *credentialHandler) RevokeCredential(w http.ResponseWriter, r *http.Requ
 }
 
 // GenerateQR handles GET /api/credentials/{id}/qr.
-// It generates a QR code for the credential that can be scanned for verification.
 func (h *credentialHandler) GenerateQR(w http.ResponseWriter, r *http.Request) {
 	userID := r.Header.Get("X-User-ID")
 	if userID == "" {
@@ -419,7 +404,6 @@ func (h *credentialHandler) GenerateQR(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Return both the QR code PNG and the verification URL
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"token":          token,

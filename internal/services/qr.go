@@ -15,15 +15,15 @@ import (
 // QRService handles QR token generation and resolution for credential
 // verification.
 type QRService struct {
-	repo          *repository.CredentialRepository
+	repo          repository.Store
 	tokenDuration time.Duration
 }
 
 // NewQRService creates a new QRService.
-func NewQRService(repo *repository.CredentialRepository) *QRService {
+func NewQRService(repo repository.Store) *QRService {
 	return &QRService{
 		repo:          repo,
-		tokenDuration: 30 * time.Minute, // QR tokens valid for 30 minutes
+		tokenDuration: 30 * time.Minute,
 	}
 }
 

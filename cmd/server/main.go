@@ -45,7 +45,7 @@ func main() {
 	credentialService := services.NewCredentialService(credentialRepo, qrService)
 	authHandler := handlers.NewAuthHandler(db, jwtSecret)
 	publicHandler := handlers.NewPublicHandler(credentialService, qrService)
-	credentialHandler := handlers.NewCredentialHandler(credentialService, qrService, jwtSecret)
+	credentialHandler := handlers.NewCredentialHandler(credentialService, qrService)
 
 	r := mux.NewRouter()
 
@@ -67,11 +67,11 @@ func main() {
 	protected.HandleFunc("/credentials/{id}/revoke", credentialHandler.RevokeCredential).Methods("POST")
 	protected.HandleFunc("/credentials/{id}/qr", credentialHandler.GenerateQR).Methods("GET")
 
+	corsOrigins := getEnv("CORS_ORIGINS", "http://localhost:3000")
 	c := cors.New(cors.Options{
-		AllowedOrigins:   []string{"*"},
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"*"},
-		AllowCredentials: true,
+		AllowedOrigins: []string{corsOrigins},
+		AllowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders: []string{"Authorization", "Content-Type"},
 	})
 
 	handler := c.Handler(r)
