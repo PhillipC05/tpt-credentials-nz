@@ -17,15 +17,15 @@ func TestQRServiceGenerateToken(t *testing.T) {
 	}
 	svc := NewQRService(store)
 
-	token, png, err := svc.GenerateQRToken("cred-1")
+	token, qrB64, err := svc.GenerateQRToken("cred-1")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if token == "" {
 		t.Error("expected non-empty token string")
 	}
-	if len(png) == 0 {
-		t.Error("expected non-empty PNG bytes")
+	if qrB64 == "" {
+		t.Error("expected non-empty base64 QR code")
 	}
 	if _, ok := store.QRTokens[token]; !ok {
 		t.Error("QR token not persisted in store")
@@ -52,7 +52,7 @@ func TestQRServiceResolveToken(t *testing.T) {
 	}
 	svc := NewQRService(store)
 
-	resp, err := svc.ResolveToken("valid-token")
+	resp, _, _, err := svc.ResolveToken("valid-token")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -75,7 +75,7 @@ func TestQRServiceExpiredToken(t *testing.T) {
 	}
 	svc := NewQRService(store)
 
-	if _, err := svc.ResolveToken("expired-token"); err == nil {
+	if _, _, _, err := svc.ResolveToken("expired-token"); err == nil {
 		t.Error("expected error for expired token, got nil")
 	}
 }

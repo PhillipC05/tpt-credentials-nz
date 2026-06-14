@@ -3,14 +3,23 @@
 interface QRVerifyDisplayProps {
   verifyUrl: string;
   token: string;
+  qrCodeBase64: string;
   onClose: () => void;
 }
 
 export default function QRVerifyDisplay({
   verifyUrl,
   token,
+  qrCodeBase64,
   onClose,
 }: QRVerifyDisplayProps) {
+  const handleDownload = () => {
+    const link = document.createElement("a");
+    link.href = `data:image/png;base64,${qrCodeBase64}`;
+    link.download = `credential-qr-${token.substring(0, 8)}.png`;
+    link.click();
+  };
+
   return (
     <div
       onClick={onClose}
@@ -43,34 +52,36 @@ export default function QRVerifyDisplay({
           Verification QR Code
         </h3>
         <p style={{ fontSize: "0.85rem", color: "#666", marginBottom: "1.5rem" }}>
-          Scan this code to verify the credential. Valid for 30 minutes.
+          Single-use · valid 30 minutes · scan to verify credential
         </p>
 
-        {/* QR Code Display Area */}
-        <div
-          style={{
-            width: "256px",
-            height: "256px",
-            background: "#f8f9fa",
-            margin: "0 auto 1.5rem",
-            borderRadius: "8px",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            color: "#999",
-            fontSize: "0.85rem",
-            border: "2px dashed #ddd",
-          }}
-        >
-          <span style={{ fontSize: "1.5rem", marginBottom: "0.5rem" }}>
-            QR
-          </span>
-          <span>Server-generated QR code</span>
-          <span style={{ fontSize: "0.75rem" }}>appears here</span>
-        </div>
+        {qrCodeBase64 ? (
+          <img
+            src={`data:image/png;base64,${qrCodeBase64}`}
+            alt="Credential verification QR code"
+            width={256}
+            height={256}
+            style={{ display: "block", margin: "0 auto 1.5rem", borderRadius: "8px" }}
+          />
+        ) : (
+          <div
+            style={{
+              width: "256px",
+              height: "256px",
+              background: "#f8f9fa",
+              margin: "0 auto 1.5rem",
+              borderRadius: "8px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "#999",
+              border: "2px dashed #ddd",
+            }}
+          >
+            Loading…
+          </div>
+        )}
 
-        {/* Token Display */}
         <div
           style={{
             background: "#f8f9fa",
@@ -82,38 +93,53 @@ export default function QRVerifyDisplay({
             wordBreak: "break-all",
           }}
         >
-          <strong>Token:</strong> {token.substring(0, 16)}...
+          <strong>Token:</strong> {token.substring(0, 16)}…
         </div>
 
-        {/* Verification URL */}
         <p style={{ fontSize: "0.8rem", color: "#999", marginBottom: "1rem" }}>
-          Verification URL:{" "}
           <a
             href={verifyUrl}
             target="_blank"
             rel="noopener noreferrer"
             style={{ color: "#3498db" }}
           >
-            {verifyUrl.length > 50
-              ? verifyUrl.substring(0, 50) + "..."
-              : verifyUrl}
+            {verifyUrl.length > 50 ? verifyUrl.substring(0, 50) + "…" : verifyUrl}
           </a>
         </p>
 
-        <button
-          onClick={onClose}
-          style={{
-            padding: "0.5rem 1.5rem",
-            background: "#1a1a2e",
-            color: "#fff",
-            border: "none",
-            borderRadius: "6px",
-            cursor: "pointer",
-            fontWeight: 600,
-          }}
-        >
-          Close
-        </button>
+        <div style={{ display: "flex", gap: "0.5rem", justifyContent: "center" }}>
+          {qrCodeBase64 && (
+            <button
+              onClick={handleDownload}
+              style={{
+                padding: "0.5rem 1rem",
+                background: "#2ecc71",
+                color: "#fff",
+                border: "none",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontWeight: 600,
+                fontSize: "0.85rem",
+              }}
+            >
+              Download PNG
+            </button>
+          )}
+          <button
+            onClick={onClose}
+            style={{
+              padding: "0.5rem 1.5rem",
+              background: "#1a1a2e",
+              color: "#fff",
+              border: "none",
+              borderRadius: "6px",
+              cursor: "pointer",
+              fontWeight: 600,
+            }}
+          >
+            Close
+          </button>
+        </div>
       </div>
     </div>
   );

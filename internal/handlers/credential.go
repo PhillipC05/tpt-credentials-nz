@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"regexp"
 	"time"
 
 	"github.com/PassThePlat/TPT-NZ-Public/packages/app-credentials/internal/models"
@@ -14,6 +15,8 @@ import (
 	"github.com/gorilla/mux"
 	"golang.org/x/crypto/bcrypt"
 )
+
+var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
 
 // --- JWT Auth Handler ---
 
@@ -65,6 +68,14 @@ func (h *authHandler) Register(w http.ResponseWriter, r *http.Request) {
 
 	if req.Email == "" || req.Password == "" || req.Name == "" {
 		http.Error(w, `{"error":"email, password, and name are required"}`, http.StatusBadRequest)
+		return
+	}
+	if !emailRegex.MatchString(req.Email) {
+		http.Error(w, `{"error":"invalid email address"}`, http.StatusBadRequest)
+		return
+	}
+	if len(req.Password) < 8 {
+		http.Error(w, `{"error":"password must be at least 8 characters"}`, http.StatusBadRequest)
 		return
 	}
 
@@ -397,7 +408,7 @@ func (h *credentialHandler) GenerateQR(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, qrPNG, err := h.qrSvc.GenerateQRToken(credID)
+	token, qrB64, err := h.qrSvc.GenerateQRToken(credID)
 	if err != nil {
 		log.Printf("failed to generate QR code: %v", err)
 		http.Error(w, `{"error":"failed to generate QR code"}`, http.StatusInternalServerError)
@@ -407,7 +418,7 @@ func (h *credentialHandler) GenerateQR(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"token":          token,
-		"qr_code_base64": qrPNG,
+		"qr_code_base64": qrB64,
 		"verify_url":     h.qrSvc.GetVerificationURL(token),
 	})
 }

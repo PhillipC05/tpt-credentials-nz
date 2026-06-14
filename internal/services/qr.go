@@ -2,9 +2,11 @@ package services
 
 import (
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"log"
+	"os"
 	"time"
 
 	"github.com/PassThePlat/TPT-NZ-Public/packages/app-credentials/internal/models"
@@ -28,11 +30,11 @@ func NewQRService(repo repository.Store) *QRService {
 }
 
 // GenerateQRToken creates a new cryptographically random token for a credential
-// and returns it along with a QR code PNG.
-func (s *QRService) GenerateQRToken(credID string) (string, []byte, error) {
+// and returns it along with a base64-encoded QR code PNG.
+func (s *QRService) GenerateQRToken(credID string) (string, string, error) {
 	token, err := s.generateRandomToken()
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to generate token: %w", err)
+		return "", "", fmt.Errorf("failed to generate token: %w", err)
 	}
 
 	qrToken := &models.QRToken{
@@ -43,52 +45,47 @@ func (s *QRService) GenerateQRToken(credID string) (string, []byte, error) {
 	}
 
 	if err := s.repo.CreateQRToken(qrToken); err != nil {
-		return "", nil, fmt.Errorf("failed to save QR token: %w", err)
+		return "", "", fmt.Errorf("failed to save QR token: %w", err)
 	}
 
-	// Generate QR code as PNG bytes
-	// The URL format should match the public verification endpoint
-	verifyURL := fmt.Sprintf("https://tpt.nz/verify/%s", token)
+	verifyURL := s.GetVerificationURL(token)
 	qrPNG, err := qrcode.Encode(verifyURL, qrcode.Medium, 256)
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to generate QR code: %w", err)
+		return "", "", fmt.Errorf("failed to generate QR code: %w", err)
 	}
 
-	return token, qrPNG, nil
+	return token, base64.StdEncoding.EncodeToString(qrPNG), nil
 }
 
 // ResolveToken validates a QR token and returns the associated credential.
 // Tokens can only be used once and must not be expired.
-func (s *QRService) ResolveToken(token string) (*models.CredentialResponse, error) {
+// Also returns the token DB ID and credential ID for audit logging.
+func (s *QRService) ResolveToken(token string) (*models.CredentialResponse, string, string, error) {
 	qt, err := s.repo.GetQRTokenByToken(token)
 	if err != nil {
-		return nil, fmt.Errorf("invalid token: %w", err)
+		return nil, "", "", fmt.Errorf("invalid token: %w", err)
 	}
 
-	// Check if token has been used
 	if qt.UsedAt != nil {
-		return nil, fmt.Errorf("token has already been used")
+		return nil, qt.ID, qt.CredentialID, fmt.Errorf("token has already been used")
 	}
 
-	// Check if token has expired
 	if time.Now().After(qt.ExpiresAt) {
-		return nil, fmt.Errorf("token has expired")
+		return nil, qt.ID, qt.CredentialID, fmt.Errorf("token has expired")
 	}
 
-	// Mark token as used (one-time use)
 	if err := s.repo.MarkQRTokenUsed(qt.ID); err != nil {
-		return nil, fmt.Errorf("failed to mark token as used: %w", err)
+		return nil, qt.ID, qt.CredentialID, fmt.Errorf("failed to mark token as used: %w", err)
 	}
 
-	// Retrieve credential and build public response
 	cred, err := s.repo.GetCredentialByID(qt.CredentialID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to resolve credential: %w", err)
+		return nil, qt.ID, qt.CredentialID, fmt.Errorf("failed to resolve credential: %w", err)
 	}
 
 	pb, err := s.repo.GetProfessionalBodyByID(cred.ProfessionalBodyID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get professional body: %w", err)
+		return nil, qt.ID, qt.CredentialID, fmt.Errorf("failed to get professional body: %w", err)
 	}
 
 	return &models.CredentialResponse{
@@ -99,7 +96,7 @@ func (s *QRService) ResolveToken(token string) (*models.CredentialResponse, erro
 		Status:        cred.Status,
 		VerifiedAt:    cred.VerifiedAt,
 		ExpiresAt:     cred.ExpiresAt,
-	}, nil
+	}, qt.ID, qt.CredentialID, nil
 }
 
 // generateRandomToken creates a cryptographically secure random hex string.
@@ -112,15 +109,34 @@ func (s *QRService) generateRandomToken() (string, error) {
 }
 
 // GetVerificationURL returns the full verification URL for a given token.
+// Uses the TPT_BASE_URL environment variable when set.
 func (s *QRService) GetVerificationURL(token string) string {
-	return fmt.Sprintf("https://tpt.nz/verify/%s", token)
+	base := os.Getenv("TPT_BASE_URL")
+	if base == "" {
+		base = "https://tpt.nz"
+	}
+	return fmt.Sprintf("%s/verify/%s", base, token)
 }
 
-// LogQRScan logs a QR scan attempt for audit purposes.
-func (s *QRService) LogQRScan(token string, success bool, remoteAddr string) {
+// LogQRScan persists a QR scan audit entry and writes a log line.
+func (s *QRService) LogQRScan(tokenID, credentialID string, success bool, remoteAddr string) {
 	status := "success"
 	if !success {
 		status = "failed"
 	}
-	log.Printf("QR scan [%s] token=%s remote=%s", status, token[:8], remoteAddr)
+	tok := tokenID
+	if len(tok) > 8 {
+		tok = tok[:8]
+	}
+	log.Printf("QR scan [%s] token=%s remote=%s", status, tok, remoteAddr)
+
+	entry := &models.QRScanLog{
+		TokenID:      tokenID,
+		CredentialID: credentialID,
+		VerifierIP:   remoteAddr,
+		Success:      success,
+	}
+	if err := s.repo.CreateQRScanLog(entry); err != nil {
+		log.Printf("QR scan audit log write failed: %v", err)
+	}
 }

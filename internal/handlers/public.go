@@ -10,7 +10,7 @@ import (
 )
 
 type publicHandler struct {
-	svc  *services.CredentialService
+	svc   *services.CredentialService
 	qrSvc *services.QRService
 }
 
@@ -23,7 +23,6 @@ func NewPublicHandler(svc *services.CredentialService, qrSvc *services.QRService
 }
 
 // GetPublicProfile handles GET /api/public/professionals/{id}.
-// Returns a sanitised public profile for a professional credential.
 func (h *publicHandler) GetPublicProfile(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	credID := vars["id"]
@@ -40,7 +39,6 @@ func (h *publicHandler) GetPublicProfile(w http.ResponseWriter, r *http.Request)
 }
 
 // VerifyCredential handles GET /api/verify/{qr_id}.
-// This is the endpoint scanned QR codes resolve to for credential verification.
 func (h *publicHandler) VerifyCredential(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	qrID := vars["qr_id"]
@@ -50,10 +48,10 @@ func (h *publicHandler) VerifyCredential(w http.ResponseWriter, r *http.Request)
 		clientIP = forwarded
 	}
 
-	cred, err := h.qrSvc.ResolveToken(qrID)
+	cred, tokenID, credentialID, err := h.qrSvc.ResolveToken(qrID)
 	if err != nil {
 		log.Printf("QR verification failed for token %s: %v", qrID, err)
-		h.qrSvc.LogQRScan(qrID, false, clientIP)
+		h.qrSvc.LogQRScan(tokenID, credentialID, false, clientIP)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -63,7 +61,7 @@ func (h *publicHandler) VerifyCredential(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	h.qrSvc.LogQRScan(qrID, true, clientIP)
+	h.qrSvc.LogQRScan(tokenID, credentialID, true, clientIP)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{

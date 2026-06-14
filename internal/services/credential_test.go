@@ -4,13 +4,27 @@ import (
 	"testing"
 
 	"github.com/PassThePlat/TPT-NZ-Public/packages/app-credentials/internal/models"
+	"github.com/PassThePlat/TPT-NZ-Public/packages/app-credentials/internal/registry"
 	"github.com/PassThePlat/TPT-NZ-Public/packages/app-credentials/internal/testutil"
 )
 
+// alwaysVerifiedClient is a test-only registry client that always returns verified.
+type alwaysVerifiedClient struct{}
+
+func (a *alwaysVerifiedClient) Verify(_, _ string) (registry.Result, error) {
+	return registry.Result{Verified: true, Notes: "test stub"}, nil
+}
+
+func newTestService(store *testutil.MockStore) *CredentialService {
+	qrSvc := NewQRService(store)
+	return NewCredentialService(store, qrSvc).WithRegistryClient(func(_ string) registry.Client {
+		return &alwaysVerifiedClient{}
+	})
+}
+
 func TestServiceCreateCredential(t *testing.T) {
 	store := testutil.NewMockStore()
-	qrSvc := NewQRService(store)
-	svc := NewCredentialService(store, qrSvc)
+	svc := newTestService(store)
 
 	cred, err := svc.CreateCredential("user-1", &models.CreateCredentialRequest{
 		ProfessionalBodySlug: "nz-medical-council",
@@ -44,8 +58,7 @@ func TestServiceRefreshCredential(t *testing.T) {
 		FullName:           "Jane Smith",
 		Status:             models.CredentialStatusPending,
 	}
-	qrSvc := NewQRService(store)
-	svc := NewCredentialService(store, qrSvc)
+	svc := newTestService(store)
 
 	updated, err := svc.RefreshCredentialStatus("cred-1")
 	if err != nil {
@@ -67,8 +80,7 @@ func TestServiceRevokeCredential(t *testing.T) {
 		UserID: "user-1",
 		Status: models.CredentialStatusActive,
 	}
-	qrSvc := NewQRService(store)
-	svc := NewCredentialService(store, qrSvc)
+	svc := newTestService(store)
 
 	if err := svc.RevokeCredential("cred-1"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
